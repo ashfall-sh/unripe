@@ -196,6 +196,7 @@ unripe check --quiet
 | `Package.resolved` (Swift) | GitHub releases, for packages on GitHub |
 | `.terraform.lock.hcl` | the Terraform registry |
 | `conan.lock` (Conan 1 and 2) | ConanCenter, by recipe revision |
+| `renv.lock` | CRAN |
 | `.github/workflows/*.yml`, `action.yml` (with `--workflows`) | GitHub releases |
 
 Dependencies from git, a local path, a workspace or another registry are
@@ -216,6 +217,11 @@ on GitHub are checked. Terraform providers from other registries, including
 OpenTofu's, are skipped. A Conan version is dated by the recipe revision the
 lockfile pins, since a new revision of an old version is new code; recipes
 with a user and channel aren't on ConanCenter and are skipped.
+
+renv.lock packages are read from CRAN, or from a Posit Package Manager mirror
+serving CRAN under `/cran/`, under whatever name the repository was given.
+Packages from Bioconductor, GitHub, a local path or another repository are
+skipped, since CRAN is the only public registry unripe can ask about them.
 
 ### GitHub Actions
 
@@ -391,7 +397,7 @@ until = 2026-11-15
 An exclude is a package name or a glob. Prefix it with an ecosystem
 (`npm:`, `pypi:`, `cargo:`, `go:`, `composer:`, `rubygems:`, `nuget:`,
 `maven:`, `jsr:`, `actions:`, `pub:`, `cocoapods:`, `swift:`, `terraform:`,
-`conan:`) to limit it to one, and add `@version` to limit
+`conan:`, `cran:`) to limit it to one, and add `@version` to limit
 it to certain versions, like `@types/node@20.*`. Gradle packages are named
 `group:artifact`, like `maven:com.mycorp:*`. PyPI names are normalised the
 way PyPI does it, so `Typing_Extensions` and `typing-extensions` are the same

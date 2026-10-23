@@ -47,6 +47,10 @@ class FakeRegistry:
         self.mavenrepo: dict[str, str] = {}
         # versions yanked, unpublished or deprecated, as (ecosystem, name, version)
         self.yanked: set[tuple[str, str, str]] = set()
+        # crandb versions whose DESCRIPTION carries no Date/Publication, and
+        # how far earlier than it each version's timeline entry sits
+        self.nopublication: set[tuple[str, str]] = set()
+        self.timelineearly: dict[tuple[str, str], timedelta] = {}
         # github: a repository's tags and the commit each points at, releases by tag, and commit times
         self.tags: dict[str, dict[str, str]] = {}
         self.releases: dict[tuple[str, str], datetime] = {}
@@ -287,6 +291,23 @@ class FakeRegistry:
                 number, _, platform = version.partition("-")
                 out.append({"number": number, "platform": platform or "ruby", "created_at": iso(moment)})
             return out
+        if parsed.netloc == "crandb.r-pkg.org":
+            name = re.fullmatch(r"/([^/]+)/all", path).group(1)
+            times = self.versions("cran", name)
+            # each version's own DESCRIPTION, which is what a lookup prefers,
+            # and a timeline that sits an hour earlier than it does
+            return {
+                "name": name,
+                "versions": {
+                    version: {"Date/Publication": moment.strftime("%Y-%m-%d %H:%M:%S") + " UTC"}
+                    for version, moment in times.items()
+                    if (name, version) not in self.nopublication
+                },
+                "timeline": {
+                    version: (moment - self.timelineearly.get((name, version), timedelta(hours=1))).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+                    for version, moment in times.items()
+                },
+            }
         raise AssertionError(f"the fake registry was asked an unexpected url: {url}")
 
     def crates(self, url: str) -> str:

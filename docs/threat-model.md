@@ -43,6 +43,9 @@ recipe revision reached the server). Maven repositories don't record it, but
 they never change a file once published, so the `Last-Modified` header of a
 version's POM is its publish time.
 
+CRAN does too, read through crandb.r-pkg.org, which keeps every version CRAN
+published, archived ones included.
+
 Some dates come from git instead, and a commit time is whatever its author
 says:
 

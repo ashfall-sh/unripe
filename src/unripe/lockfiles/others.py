@@ -1,10 +1,11 @@
-"""Cargo.lock, go.mod, composer.lock, Gemfile.lock and conan.lock."""
+"""Cargo.lock, go.mod, composer.lock, Gemfile.lock, conan.lock and renv.lock."""
 
 from __future__ import annotations
 
 import json
 import re
 import tomllib
+import urllib.parse
 from datetime import datetime, timezone
 
 from unripe.model import Package
@@ -12,6 +13,58 @@ from unripe.model import Package
 CRATES = ("registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/")
 # name/version, then @user/channel, #recipe-revision and %timestamp, each optional
 CONANREF = re.compile(r"^([a-z0-9_][a-z0-9_+.-]*)/([^@#%\s]+)(?:@([^#%\s]+))?(?:#([0-9a-f]+))?(?:%[0-9.]+)?$")
+# a JSON string, or R's NA written bare: outside a string there is no legal
+# identifier, so a bare NA can only be R's
+R_NA = re.compile(r'"(?:[^"\\]|\\.)*"|\bNA\b')
+
+
+# CRAN itself, and the hosts that serve CRAN's packages at CRAN's versions.
+# Posit Package Manager mirrors CRAN under /cran/ and Bioconductor under
+# /bioconductor/, so the path decides which of the two it is.
+CRAN_HOSTS = ("cran.r-project.org", "cloud.r-project.org", "cran.rstudio.com")
+PPM_HOSTS = ("packagemanager.posit.co", "packagemanager.rstudio.com", "p3m.dev")
+
+
+def cranurl(url) -> bool:
+    """Whether a URL points at CRAN, or at a host that serves CRAN unchanged."""
+    if not isinstance(url, str) or not url.strip():
+        return False
+    split = urllib.parse.urlsplit(url.strip())
+    if split.hostname in CRAN_HOSTS:
+        return True
+    # a Posit Package Manager URL is CRAN under /cran/, Bioconductor under /bioconductor/
+    return split.hostname in PPM_HOSTS and split.path.startswith("/cran/")
+
+
+def cranrepos(section) -> dict[str, str]:
+    """
+    renv's R.Repositories as a name to URL map. renv writes a list of
+    {"Name": ..., "URL": ...}; older ones wrote the name and URL as an object.
+    """
+    if isinstance(section, dict):
+        return {str(name): url for name, url in section.items() if isinstance(url, str)}
+    found = {}
+    for entry in section if isinstance(section, list) else []:
+        if isinstance(entry, dict) and isinstance(entry.get("Name"), str):
+            found[entry["Name"]] = str(entry.get("URL") or "")
+    return found
+
+
+def cransource(entry: dict, repos: dict[str, str]) -> bool:
+    """
+    Whether an entry was installed from CRAN, however its repository was
+    named: renv writes "CRAN", pak writes it as the Source, and a mirror is
+    called whatever it was called (RSPM, P3M, PPM) with the URL it points at
+    in R.Repositories or in the entry's own RemoteRepos.
+    """
+    if "CRAN" in (entry.get("Source"), entry.get("Repository")):
+        return True
+    if cranurl(repos.get(str(entry.get("Repository") or ""))):
+        return True
+    remotes = entry.get("RemoteRepos")
+    if isinstance(remotes, str):
+        remotes = [remotes]
+    return isinstance(remotes, list) and any(cranurl(remote) for remote in remotes)
 
 
 def cargo(text: str, lockfile: str) -> list[Package]:
@@ -153,3 +206,40 @@ def conan(text: str, lockfile: str) -> list[Package]:
         package = Package("conan", name, f"{version}#{revision}" if revision else version, lockfile)
         found.setdefault(package.key, package)
     return list(found.values())
+
+
+def rna(text: str) -> str:
+    """renv.lock writes R's NA bare, which is not JSON. Strings are left alone."""
+    return R_NA.sub(lambda match: match.group(0) if match.group(0).startswith('"') else "null", text)
+
+
+def renv(text: str, lockfile: str) -> list[Package]:
+    """
+    renv.lock: R packages installed from CRAN. renv names CRAN as the
+    repository for a package from it, whether it writes "CRAN" or
+    "Repository" as the source, and a mirror is named for whatever it was
+    called, with the URL it points at in R.Repositories. Packages from
+    Bioconductor, GitHub, a local path or any other repository are skipped.
+    """
+    data = json.loads(rna(text))
+    if not isinstance(data, dict):
+        raise ValueError("not a renv lockfile")
+    packages = data.get("Packages")
+    if not isinstance(packages, dict):
+        raise ValueError("not a renv lockfile")
+    section = data.get("R")
+    # where each repository name points, so a mirror can be recognised by its URL
+    repos = cranrepos(section.get("Repositories") if isinstance(section, dict) else None)
+    found = []
+    for entry in packages.values():
+        if not isinstance(entry, dict):
+            continue
+        # Bioconductor, GitHub, a local path or another repository has no CRAN
+        # publish time to look up, and a private mirror named CRAN is fine to
+        # keep: its packages come back unknown, which fails the safe way
+        if not cransource(entry, repos):
+            continue
+        name, version = entry.get("Package"), entry.get("Version")
+        if isinstance(name, str) and isinstance(version, str) and name and version:
+            found.append(Package("cran", name, version, lockfile))
+    return found

@@ -35,6 +35,7 @@ CANARIES = {
     "swift": ("apple/swift-argument-parser", "1.3.0"),
     "terraform": ("hashicorp/aws", "5.31.0"),
     "conan": ("zlib", "1.3.1"),
+    "cran": ("jsonlite", "1.8.4"),
 }
 
 

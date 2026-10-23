@@ -432,12 +432,28 @@ def test_jsr_versions_too_old_for_meta_json_are_dated_by_the_api(fake, lookups):
 
 
 
-@pytest.mark.parametrize("ecosystem, name, version", [("pub", "sqlite3", "2.9.4"), ("cocoapods", "GRDB.swift", "5.26.0"), ("terraform", "hashicorp/aws", "5.31.0")])
+@pytest.mark.parametrize("ecosystem, name, version", [("pub", "sqlite3", "2.9.4"), ("cocoapods", "GRDB.swift", "5.26.0"), ("terraform", "hashicorp/aws", "5.31.0"), ("cran", "jsonlite", "1.8.4")])
 def test_app_registries_answer_and_suggest(fake, lookups, ecosystem, name, version):
     fresh = fake.add(ecosystem, name, version, timedelta(hours=3))
     fake.add(ecosystem, name, "0.0.1", timedelta(days=90))
     assert lookups.published(Package(ecosystem, name, version)) == fresh
     assert set(lookups.versions(ecosystem, name)) == {version, "0.0.1"}
+
+
+def test_cran_prefers_date_publication_over_the_timeline(fake, lookups):
+    """crandb's timeline sits an hour before each version's own Date/Publication, which is what a lookup goes by."""
+    moment = fake.add("cran", "jsonlite", "1.8.4", at=datetime(2022, 12, 6, 8, 10, 2, tzinfo=timezone.utc))
+    assert lookups.cranall("jsonlite") == {"1.8.4": moment}
+    # an hour early is crandb's own offset; a wider one must not be believed either
+    fake.timelineearly[("jsonlite", "1.8.4")] = timedelta(hours=5)
+    assert lookups.cranall("jsonlite") == {"1.8.4": moment}
+
+
+def test_cran_falls_back_to_the_timeline_when_date_publication_is_missing(fake, lookups):
+    """A few very old versions carry no Date/Publication; the timeline is all there is for them."""
+    moment = fake.add("cran", "MASS", "7.3-0", at=datetime(2009, 5, 7, 11, 20, 43, tzinfo=timezone.utc))
+    fake.nopublication.add(("MASS", "7.3-0"))
+    assert lookups.cranall("MASS") == {"7.3-0": moment - timedelta(hours=1)}
 
 
 def test_swift_is_dated_by_the_release_of_its_tag(fake, lookups):

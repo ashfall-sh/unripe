@@ -43,7 +43,7 @@ ECOSYSTEM = {
     "enum": list(ECOSYSTEMS),
     "description": "The registry: npm (also pnpm, yarn, bun), pypi, cargo, go, composer, rubygems, nuget, maven "
     "(group:artifact), jsr, pub (Dart and Flutter), cocoapods, swift (owner/repo on GitHub), terraform "
-    "(namespace/provider), conan (C and C++ from ConanCenter), actions (owner/repo).",
+    "(namespace/provider), conan (C and C++ from ConanCenter), cran (R packages on CRAN), actions (owner/repo).",
 }
 MIN_AGE = {"type": "string", "description": "Override the minimum age, like 72h, 3d or 1w. Leave out to use the project's policy."}
 

@@ -125,6 +125,13 @@ def test_jsonc_keeps_strings_intact():
     assert json.loads(jsonc(text)) == {"a": "// not a comment", "b": "/* nor this */", "c": [1, 2], "d": 'x"y'}
 
 
+def test_rna_leaves_strings_alone():
+    from unripe.lockfiles.others import rna
+
+    text = '{"Description": "NA and more NA", "OS_type": NA}'
+    assert json.loads(rna(text)) == {"Description": "NA and more NA", "OS_type": None}
+
+
 def test_bun_lockb_is_reported_unreadable():
     path = TESTDATA / "bun-binary/bun.lockb"
     with pytest.raises(lockfiles.Unreadable, match="binary"):
@@ -197,6 +204,7 @@ def test_gemfile_lock_rubygems_org_only_with_platforms():
         ("package-lock.json", "{not json"),
         ("Cargo.lock", "[[package]\nname = "),
         ("uv.lock", "version = = 1"),
+        ("renv.lock", "{not json"),
     ],
 )
 def test_broken_lockfiles_are_unreadable_not_empty(name, text):
@@ -388,6 +396,56 @@ def test_conan_lock_keeps_conancenter_references_with_their_revision():
     assert pairs("conan-v1/conan.lock") == {("zlib", "1.2.13")}
     with pytest.raises(lockfiles.Unreadable):
         lockfiles.read("[]", "conan.lock")
+
+
+def test_renv_lock_keeps_cran_packages_only():
+    # renv 1.0.7 is the entry with R's NA written bare, which is not JSON
+    assert pairs("renv/renv.lock") == {("MASS", "7.3-54"), ("R6", "2.5.1"), ("fs", "1.6.4"), ("renv", "1.0.7")}
+    assert {p.ecosystem for p in parse("renv/renv.lock")} == {"cran"}
+
+
+def locked(url: str, entry: dict | None = None) -> list:
+    """A renv.lock whose one repository is called RSPM and points at `url`."""
+    return lockfiles.read(json.dumps({
+        "R": {"Version": "4.4.1", "Repositories": [{"Name": "RSPM", "URL": url}]},
+        "Packages": {"fs": entry or {"Package": "fs", "Version": "1.6.4", "Source": "Repository", "Repository": "RSPM"}},
+    }), "renv.lock")
+
+
+def test_renv_reads_a_posit_package_manager_url_by_its_path():
+    """PPM serves CRAN under /cran/ and Bioconductor under /bioconductor/, so the path decides."""
+    assert [p.name for p in locked("https://packagemanager.posit.co/cran/latest")] == ["fs"]
+    assert [p.name for p in locked("https://packagemanager.posit.co/bioconductor/latest")] == []
+    assert [p.name for p in locked("https://cran.r-project.org")] == ["fs"]
+    assert [p.name for p in locked("https://cloud.r-project.org")] == ["fs"]
+    # p3m.dev and the older rstudio host are Posit too, and a URL with no path is not CRAN
+    assert [p.name for p in locked("https://p3m.dev/cran/latest")] == ["fs"]
+    assert [p.name for p in locked("https://packagemanager.rstudio.com/cran/latest")] == ["fs"]
+    assert [p.name for p in locked("https://packagemanager.posit.co/cran")] == []
+    assert [p.name for p in locked("https://example.org/cran/latest")] == []
+
+
+def test_renv_reads_paks_remote_repos():
+    """pak writes the URL it installed from, once or as a list, under whichever name."""
+    cran = {"Package": "fs", "Version": "1.6.4", "Source": "Repository", "RemoteRepos": "https://packagemanager.posit.co/cran/latest"}
+    assert [p.name for p in locked("https://example.org", cran)] == ["fs"]
+    bioc = dict(cran, RemoteRepos=["https://packagemanager.posit.co/bioconductor/latest"])
+    assert [p.name for p in locked("https://example.org", bioc)] == []
+    # a repository the lockfile names CRAN is CRAN whatever URL is written against it
+    assert [p.name for p in locked("https://example.org", dict(cran, Source="CRAN", Repository="CRAN"))] == ["fs"]
+    # a mirror that is not CRAN under any name, and a local path
+    assert [p.name for p in locked("https://example.org")] == []
+    assert [p.name for p in locked("https://example.org", {"Package": "fs", "Version": "1.6.4", "Source": "Repository"})] == []
+    assert [p.name for p in locked("https://example.org", {"Package": "fs", "Version": "1.6.4", "Source": "GitHub", "RemoteRepos": "https://cran.r-project.org"})] == ["fs"]
+
+
+def test_renv_reads_repositories_written_as_an_object():
+    """renv wrote R.Repositories as a name to URL object before it wrote a list."""
+    text = json.dumps({
+        "R": {"Version": "4.4.1", "Repositories": {"CRAN": "https://cloud.r-project.org"}},
+        "Packages": {"MASS": {"Package": "MASS", "Version": "7.3-54", "Source": "Repository", "Repository": "CRAN"}},
+    })
+    assert [(p.name, p.version) for p in lockfiles.read(text, "renv.lock")] == [("MASS", "7.3-54")]
 
 
 def test_damaged_lockfiles_never_crash_or_invent_packages():

@@ -34,7 +34,7 @@ assert report["schema"] == 1
 
 | Field | Type | |
 |---|---|---|
-| `ecosystem` | string | `npm`, `pypi`, `cargo`, `go`, `composer`, `rubygems`, `nuget`, `maven`, `jsr`, `actions`, `pub`, `cocoapods`, `swift`, `terraform` or `conan` |
+| `ecosystem` | string | `npm`, `pypi`, `cargo`, `go`, `composer`, `rubygems`, `nuget`, `maven`, `jsr`, `actions`, `pub`, `cocoapods`, `swift`, `terraform`, `conan` or `cran` |
 | `name` | string | as the registry names it (PyPI names normalised, Maven as `group:artifact`) |
 | `version` | string | as locked; Conan versions include the recipe revision after `#` |
 | `state` | string | `ok`, `unripe`, `unknown`, `allowed` or `excluded` |

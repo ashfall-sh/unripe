@@ -36,6 +36,7 @@ PARSERS: dict[str, Parser] = {
     "Package.resolved": apps.swiftresolved,
     ".terraform.lock.hcl": apps.terraform,
     "conan.lock": others.conan,
+    "renv.lock": others.renv,
 }
 PYLOCK = re.compile(r"^pylock\.([^.]+\.)?toml$")
 REQUIREMENTS = re.compile(r"^(requirements|constraints)[\w.-]*\.txt$", re.IGNORECASE)

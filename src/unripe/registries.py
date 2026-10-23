@@ -556,6 +556,7 @@ class Registries:
             "swift": self.swift,
             "terraform": self.terraform,
             "conan": self.conan,
+            "cran": self.cran,
         }
         # registries whose one answer covers every version are asked once per package
         self.pending: dict[str, threading.Lock] = {}
@@ -581,6 +582,7 @@ class Registries:
             "pub": self.puball,
             "cocoapods": self.cocoapodsall,
             "terraform": self.terraformall,
+            "cran": self.cranall,
         }
 
     def published(self, package: Package) -> datetime:
@@ -1027,3 +1029,30 @@ class Registries:
         if unreachable:
             raise unreachable
         raise Missing(f"{package} is in none of the Maven repositories unripe knows")
+
+    def cran(self, package: Package) -> datetime:
+        return self.every(package)
+
+    def cranall(self, name: str) -> dict[str, datetime]:
+        # crandb.r-pkg.org keeps every version CRAN published, archived ones included
+        data = fetch(f"https://crandb.r-pkg.org/{urllib.parse.quote(name)}/all")
+        data = data if isinstance(data, dict) else {}
+        # the same answer also carries each version's own DESCRIPTION, whose
+        # Date/Publication CRAN wrote in UTC
+        versions = data.get("versions") if isinstance(data.get("versions"), dict) else {}
+        timeline = data.get("timeline") if isinstance(data.get("timeline"), dict) else {}
+        times = {}
+        for version in set(timeline) | set(versions):
+            entry = versions.get(version)
+            try:
+                if isinstance(entry, dict) and entry.get("Date/Publication"):
+                    # CRAN writes "2026-07-15 10:58:26 UTC", and the oldest
+                    # versions write it with no zone at all
+                    times[str(version)] = datetime.strptime(str(entry["Date/Publication"]).replace(" UTC", ""), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                else:
+                    # a few very old versions have no Date/Publication; their
+                    # timeline is an hour early, which no longer matters by now
+                    times[str(version)] = when(str(timeline[version]))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return times
