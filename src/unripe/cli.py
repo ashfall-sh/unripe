@@ -146,8 +146,8 @@ def parser() -> argparse.ArgumentParser:
     return top
 
 
-def registries(nocache: bool, mavenrepos: list[str] | None = None, now: datetime | None = None, offline: bool = False) -> Registries:
-    return Registries(Cache(None if nocache else cachedir()), mavenrepos=mavenrepos or (), now=now, offline=offline)
+def registries(nocache: bool, policy: Policy, now: datetime | None = None, offline: bool = False) -> Registries:
+    return Registries(Cache(None if nocache else cachedir()), mavenrepos=policy.maven_repositories, now=now, offline=offline, mirrors=policy.registries)
 
 
 def progress(done: int, total: int) -> None:
@@ -192,6 +192,15 @@ def extra(text: str) -> tuple[str, str]:
     return form, path
 
 
+def credentials(mirror) -> str:
+    """How a configured registry is signed in to, naming the variable but never showing its value."""
+    variable = mirror.token_env or mirror.basic_env
+    if not variable:
+        return ""
+    kind = "token" if mirror.token_env else "user and password"
+    return f" ({kind} from {variable}, {'set' if os.environ.get(variable) else 'NOT SET'})"
+
+
 def runcheck(args: argparse.Namespace) -> int:
     extras = [extra(text) for text in args.report]
     settings, source = config(".", args.config)
@@ -204,7 +213,7 @@ def runcheck(args: argparse.Namespace) -> int:
     now = moment(args.as_of) if args.as_of else datetime.now(timezone.utc)
     show = progress if sys.stderr.isatty() else None
     started = time.monotonic()
-    found = registries(args.no_cache, policy.maven_repositories, now, args.offline)
+    found = registries(args.no_cache, policy, now, args.offline)
     result = check(paths, policy, found, since=args.since, now=now, progress=show, suggest=not args.no_suggest)
 
     report = render(result, args.format, args.verbose, color=args.format == "text" and not args.output and colored())
@@ -271,7 +280,7 @@ def runexplain(args: argparse.Namespace) -> int:
     policy = build(settings, args.min_age, (), None, source)
     name = normal(args.name) if args.ecosystem == "pypi" else args.name
     now = datetime.now(timezone.utc)
-    found = registries(args.no_cache, policy.maven_repositories)
+    found = registries(args.no_cache, policy)
     if args.version is None:
         return listing(Package(args.ecosystem, name, ""), policy, found, now)
     version = args.version.lstrip("v") if args.ecosystem == "composer" else args.version
@@ -304,6 +313,8 @@ def runconfig(args: argparse.Namespace) -> int:
         out.append(f"  allow                {entry.rule}  {entry.describe()}{state}")
     for url in policy.maven_repositories:
         out.append(f"  maven-repositories   {url}")
+    for name, mirror in policy.registries.items():
+        out.append(f"  registries {name:<9} {mirror.url}{credentials(mirror)}")
     out.append(f"  cache                {cachedir()}")
 
     directory = source.resolve().parent if source and not args.config else Path.cwd()
@@ -438,6 +449,11 @@ def rundoctor(args: argparse.Namespace) -> int:
     out.append(f"proxy      {proxy + ' is set' if proxy else 'none set'}")
     bundle = next((name for name in ("UNRIPE_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSL_CERT_FILE") if os.environ.get(name)), None)
     out.append(f"ca bundle  {bundle + ' is set' if bundle else 'none set, so the system certificates'}")
+    for name, mirror in policy.registries.items():
+        out.append(f"registry   {name} at {mirror.url}{credentials(mirror)}")
+        variable = mirror.token_env or mirror.basic_env
+        if variable and not os.environ.get(variable):
+            problems += 1
 
     paths = args.paths or ["."]
     from unripe import lockfiles
@@ -463,7 +479,7 @@ def rundoctor(args: argparse.Namespace) -> int:
     if ecosystems.keys() & {"actions", "swift"} and not (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")):
         out.append("github     no GITHUB_TOKEN, so 60 requests an hour for actions and swift packages")
 
-    lookups = registries(True, policy.maven_repositories)
+    lookups = registries(True, policy)
     for ecosystem in ECOSYSTEMS:
         if ecosystem not in ecosystems:
             continue

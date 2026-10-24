@@ -184,6 +184,8 @@ def test_ci_formats_run(project, fake, capsys, form):
 
 def test_no_colour_when_not_a_terminal_or_no_color_is_set(project, fake, capsys, monkeypatch):
     fake.add("npm", "ms", "2.1.3", timedelta(hours=1))
+    # NO_COLOR wins over FORCE_COLOR, so one left in the environment must not leak in
+    monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("FORCE_COLOR", "1")
     cli.main(["check"])
     assert "\033[31m" in capsys.readouterr().out
@@ -298,3 +300,17 @@ def test_doctor(project, fake, capsys):
     fake.down.clear()
     assert cli.main(["doctor"]) == 0
     assert "doctor: everything works" in capsys.readouterr().out
+
+
+def test_config_and_doctor_show_configured_registries_without_secrets(project, fake, capsys, monkeypatch):
+    monkeypatch.delenv("NPM_TOKEN", raising=False)
+    (project / ".unripe.toml").write_text('[registries]\nnpm = { url = "https://npm.example.com", token-env = "NPM_TOKEN" }\n')
+    assert cli.main(["config"]) == 0
+    assert "registries npm       https://npm.example.com (token from NPM_TOKEN, NOT SET)" in capsys.readouterr().out
+    monkeypatch.setenv("NPM_TOKEN", "s3cret")
+    cli.main(["config"])
+    out = capsys.readouterr().out
+    assert "(token from NPM_TOKEN, set)" in out and "s3cret" not in out
+    monkeypatch.delenv("NPM_TOKEN")
+    assert cli.main(["doctor"]) == 1
+    assert "registry   npm at https://npm.example.com (token from NPM_TOKEN, NOT SET)" in capsys.readouterr().out

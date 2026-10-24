@@ -253,7 +253,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: TexWoW/unripe@v0.6.1
+      - uses: TexWoW/unripe@v0.7.0
         with:
           min-age: 3d
           comment: true
@@ -301,7 +301,7 @@ If you want the results as code scanning alerts, write SARIF and upload it
 (this needs `security-events: write`):
 
 ```yaml
-      - uses: TexWoW/unripe@v0.6.1
+      - uses: TexWoW/unripe@v0.7.0
         with:
           sarif: unripe.sarif
       - uses: github/codeql-action/upload-sarif@v4
@@ -315,7 +315,7 @@ If you want the results as code scanning alerts, write SARIF and upload it
 ```yaml
 repos:
   - repo: https://github.com/TexWoW/unripe
-    rev: v0.6.1
+    rev: v0.7.0
     hooks:
       - id: unripe
 ```
@@ -327,7 +327,7 @@ you only want it to look at what the commit adds.
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/TexWoW/unripe/v0.6.1/ci/gitlab.yml
+  - remote: https://raw.githubusercontent.com/TexWoW/unripe/v0.7.0/ci/gitlab.yml
 ```
 
 That adds an `unripe` job to the `test` stage. On merge requests it checks
@@ -348,7 +348,7 @@ their cooldowns too, so they stop opening pull requests unripe would fail.
 ## With AI coding agents
 
 ```bash
-claude mcp add unripe -- uvx unripe@0.6.1 mcp
+claude mcp add unripe -- uvx unripe@0.7.0 mcp
 ```
 
 `unripe mcp` is a Model Context Protocol server with three read-only tools:
@@ -382,6 +382,11 @@ workflows = true
 # let a version through early when a security advisory names it as the fix
 allow-security-fixes = true
 
+# ask your own registries instead of the public ones
+[registries]
+npm = { url = "https://artifactory.example.com/api/npm/npm-remote", token-env = "NPM_TOKEN" }
+pypi = "https://pypi.example.com"
+
 # a different minimum age for an ecosystem or some packages
 [min-age-for]
 npm = "7d"
@@ -408,6 +413,16 @@ version you need now, use `[[allow]]` instead. It only lets that version
 through while it is too new, it shows up in the report as allowed, and once
 the `until` date has passed it stops applying. unripe also says when an allow
 entry is no longer needed because the version has aged past the minimum.
+
+`[registries]` points npm, PyPI, Conan or the Go proxy at another server,
+like an Artifactory, Nexus or Verdaccio mirror. Each takes a URL, or a URL
+with `token-env` (the name of an environment variable holding a token, sent
+as a bearer token) or `basic-env` (one holding `user:password`). The secret
+itself never goes in the file. It is only sent over https, only to that
+URL's host and path, and never follows a redirect to another host. The
+environment variables below win over the file, and credentials stay with
+the URL they were set for. `unripe config` and `unripe doctor` say whether
+each variable is set, without showing it.
 
 `min-age-for` takes an ecosystem name or a package pattern. A package
 pattern wins over an ecosystem, and the first pattern that matches is used.
@@ -518,10 +533,11 @@ years old. Maven repositories never change a published file, so a POM's
 `Last-Modified` header is when the version was published, and it's there
 the moment the file is, before the search index catches up.
 
-Mirrors work through `UNRIPE_NPM_REGISTRY`, `UNRIPE_PYPI_URL` and
+Mirrors can also be set with `UNRIPE_NPM_REGISTRY`, `UNRIPE_PYPI_URL` and
 `UNRIPE_CONAN_REMOTE` (any server with Conan's v2 API), and
 `UNRIPE_MAVEN_REPOS` (comma separated) adds Maven repositories the same way
-`maven-repositories` does. For Go, unripe uses the first proxy in `GOPROXY`.
+`maven-repositories` does. For Go, unripe uses the first proxy in `GOPROXY`,
+then the one in `[registries]`.
 Behind a corporate proxy, `HTTPS_PROXY` and `NO_PROXY` work as usual, and a
 company CA bundle can be given with `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` or
 `UNRIPE_CA_BUNDLE`. A certificate error says so, rather than being retried.
@@ -597,9 +613,10 @@ Each finding's state is `ok`, `unripe`, `unknown`, `allowed` or `excluded`.
 that exact version with a reason and an `until` date. If it's a security
 fix, `allow-security-fixes = true` handles it without an entry.
 
-**We use a private registry.** unripe can't see into it, so those packages
-come back unknown. Exclude them, or use `--unknown warn`. For private Go
-modules, point `GOPROXY` at your own proxy.
+**We use a private registry.** Point unripe at it with `[registries]` in
+the config, with a token from an environment variable if it needs one. A
+private registry that proxies the public one answers for everything. If
+yours only holds your own packages, exclude them instead.
 
 **Does this replace `npm audit` or similar?** No. Audit tools know about
 reported vulnerabilities. unripe doesn't know anything about any package. It

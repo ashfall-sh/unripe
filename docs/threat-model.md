@@ -91,5 +91,9 @@ so an exception can't hide in a config file.
 
 unripe sends package names and versions to the registries that host them,
 and with `allow-security-fixes`, to osv.dev. Nothing else leaves the
-machine: no telemetry, no account, no unripe server. Answers are cached on
+machine: no telemetry, no account, no unripe server. Credentials for a
+registry in `[registries]` are read from an environment variable, sent only
+over https to that registry's host and path, and dropped on any redirect to
+another host. The same goes for `GITHUB_TOKEN`, which only goes to GitHub's
+API. Answers are cached on
 disk so a second run asks nothing.

@@ -505,3 +505,44 @@ def test_a_go_module_outside_the_checksum_database_is_dated_by_its_commit(fake, 
     public = Package("go", "github.com/BurntSushi/toml", "v1.3.2")
     lookups.published(public)
     assert lookups.basis(public) == ""
+
+
+def test_a_configured_registry_is_asked_with_its_own_credentials(fake, monkeypatch):
+    from unripe.policy import Mirror
+
+    monkeypatch.delenv("UNRIPE_NPM_REGISTRY", raising=False)
+    monkeypatch.setenv("NPM_TOKEN", "s3cret")
+    monkeypatch.setenv("PYPI_AUTH", "me:pw")
+    lookups = Registries(Cache(None), now=NOW, mirrors={
+        "npm": Mirror("https://npm.example.com/api/npm", token_env="NPM_TOKEN"),
+        "pypi": Mirror("https://pypi.example.com", basic_env="PYPI_AUTH"),
+        "go": Mirror("https://goproxy.example.com"),
+    })
+    assert lookups.npmurl == "https://npm.example.com/api/npm" and lookups.gourl == "https://goproxy.example.com"
+    assert registries.authorization("https://npm.example.com/api/npm/left-pad") == "Bearer s3cret"
+    assert registries.authorization("https://pypi.example.com/pypi/idna/json") == "Basic bWU6cHc="
+    # never to another host, another scheme, a neighbouring path or the public registry
+    for elsewhere in ("https://registry.npmjs.org/left-pad", "http://npm.example.com/api/npm/x", "https://npm.example.com/api/npmx/y", "https://evil.example.com/api/npm/x"):
+        assert registries.authorization(elsewhere) is None
+    # a variable that isn't set sends nothing
+    monkeypatch.delenv("NPM_TOKEN")
+    assert registries.authorization("https://npm.example.com/api/npm/left-pad") is None
+    # the environment's address wins, and the configured credentials don't follow it there
+    monkeypatch.setenv("NPM_TOKEN", "s3cret")
+    monkeypatch.setenv("UNRIPE_NPM_REGISTRY", "https://mirror.example.org")
+    moved = Registries(Cache(None), now=NOW, mirrors={"npm": Mirror("https://npm.example.com/api/npm", token_env="NPM_TOKEN")})
+    assert moved.npmurl == "https://mirror.example.org"
+    assert registries.authorization("https://mirror.example.org/left-pad") is None
+    # a run without the config forgets them
+    Registries(Cache(None), now=NOW)
+    assert registries.authorization("https://npm.example.com/api/npm/left-pad") is None
+
+
+def test_goproxy_from_the_environment_wins_over_the_config(fake, monkeypatch):
+    from unripe.policy import Mirror
+
+    monkeypatch.setenv("GOPROXY", "https://corp.example.com/go,direct")
+    assert registries.goproxy("https://goproxy.example.com") == "https://corp.example.com/go"
+    monkeypatch.delenv("GOPROXY")
+    lookups = Registries(Cache(None), now=NOW, mirrors={"go": Mirror("https://goproxy.example.com")})
+    assert registries.goproxy(lookups.gourl) == "https://goproxy.example.com"

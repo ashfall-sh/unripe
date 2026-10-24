@@ -25,14 +25,14 @@ instead, so the agent can just use that.
 
 ## Setup
 
-Each of these runs `uvx unripe@0.6.1 mcp`. Pinning the version means the
+Each of these runs `uvx unripe@0.7.0 mcp`. Pinning the version means the
 server doesn't change under you; bump it when you upgrade. If you installed
 unripe with pipx or pip, use `unripe` with the argument `mcp` instead.
 
 ### Claude Code
 
 ```bash
-claude mcp add unripe -- uvx unripe@0.6.1 mcp
+claude mcp add unripe -- uvx unripe@0.7.0 mcp
 ```
 
 Add `--scope project` to write it to `.mcp.json` in the repository, so
@@ -41,7 +41,7 @@ everyone working on it gets it.
 ### Codex
 
 ```bash
-codex mcp add unripe -- uvx unripe@0.6.1 mcp
+codex mcp add unripe -- uvx unripe@0.7.0 mcp
 ```
 
 or in `~/.codex/config.toml`:
@@ -49,7 +49,7 @@ or in `~/.codex/config.toml`:
 ```toml
 [mcp_servers.unripe]
 command = "uvx"
-args = ["unripe@0.6.1", "mcp"]
+args = ["unripe@0.7.0", "mcp"]
 ```
 
 ### VS Code (Copilot agent mode)
@@ -62,7 +62,7 @@ args = ["unripe@0.6.1", "mcp"]
     "unripe": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["unripe@0.6.1", "mcp"]
+      "args": ["unripe@0.7.0", "mcp"]
     }
   }
 }
@@ -77,7 +77,7 @@ These all use the same `mcpServers` block:
   "mcpServers": {
     "unripe": {
       "command": "uvx",
-      "args": ["unripe@0.6.1", "mcp"]
+      "args": ["unripe@0.7.0", "mcp"]
     }
   }
 }

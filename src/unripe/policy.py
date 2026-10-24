@@ -6,6 +6,7 @@ import fnmatch
 import os
 import re
 import tomllib
+import urllib.parse
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -16,7 +17,9 @@ UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
 DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([mhdw])\s*$", re.IGNORECASE)
 DEFAULT_AGE = timedelta(days=3)
 CONFIGS = (".unripe.toml", "pyproject.toml")
-KEYS = {"min-age", "min-age-for", "exclude", "allow", "allow-security-fixes", "unknown", "paths", "maven-repositories", "workflows"}
+KEYS = {"min-age", "min-age-for", "exclude", "allow", "allow-security-fixes", "unknown", "paths", "maven-repositories", "workflows", "registries"}
+# the registries a [registries] table can point somewhere else: a mirror, or a company registry
+MIRRORED = ("npm", "pypi", "conan", "go")
 
 
 class PolicyError(ValueError):
@@ -105,6 +108,21 @@ class Allow:
         return f"{said}: {self.reason}" if self.reason else said
 
 
+@dataclass(frozen=True)
+class Mirror:
+    """
+    Where to ask one registry instead of its public address, and the
+    environment variables that hold its credentials. The credentials
+    themselves never go in the config file.
+    """
+
+    url: str
+    # a token, sent as a bearer token
+    token_env: str = ""
+    # "user:password", sent as basic auth
+    basic_env: str = ""
+
+
 @dataclass
 class Policy:
     min_age: timedelta = DEFAULT_AGE
@@ -120,6 +138,8 @@ class Policy:
     security_fixes: bool = False
     # also check the actions GitHub workflows use
     workflows: bool = False
+    # other addresses for npm, pypi, conan and go
+    registries: dict[str, Mirror] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.unknown not in ("fail", "warn"):
@@ -256,7 +276,43 @@ def build(
         allow=allows(settings.get("allow", []), where),
         security_fixes=flag("allow-security-fixes") if security_fixes is None else security_fixes,
         workflows=flag("workflows") if workflows is None else workflows,
+        registries=mirrors(settings.get("registries", {}), where),
     )
+
+
+def mirrors(table, where: str = "") -> dict[str, Mirror]:
+    """
+    `[registries]`: a registry name to a URL, or to a table with `url` and the
+    name of the environment variable holding a token (`token-env`) or a
+    user and password (`basic-env`).
+    """
+    example = 'like npm = "https://npm.example.com" or pypi = { url = "https://pypi.example.com", token-env = "PYPI_TOKEN" }'
+    if not isinstance(table, dict):
+        raise PolicyError(f"{where}registries should be a table, {example}")
+    found = {}
+    for name, value in table.items():
+        if name not in MIRRORED:
+            raise PolicyError(f"{where}registries: unripe can point {', '.join(MIRRORED)} elsewhere, not {name} (Maven has maven-repositories)")
+        if isinstance(value, str):
+            value = {"url": value}
+        if not isinstance(value, dict) or not isinstance(value.get("url"), str):
+            raise PolicyError(f"{where}registries {name} needs a url, {example}")
+        unexpected = set(value) - {"url", "token-env", "basic-env"}
+        if unexpected:
+            raise PolicyError(f"{where}registries {name} has {', '.join(sorted(unexpected))}; it takes url, token-env and basic-env")
+        url = value["url"].strip().rstrip("/")
+        scheme = urllib.parse.urlsplit(url).scheme
+        if scheme not in ("http", "https") or not urllib.parse.urlsplit(url).netloc:
+            raise PolicyError(f"{where}registries {name}: {url!r} is not an http or https URL")
+        token, basic = value.get("token-env", ""), value.get("basic-env", "")
+        if not isinstance(token, str) or not isinstance(basic, str):
+            raise PolicyError(f"{where}registries {name}: token-env and basic-env name an environment variable")
+        if token and basic:
+            raise PolicyError(f"{where}registries {name}: use token-env or basic-env, not both")
+        if (token or basic) and scheme != "https":
+            raise PolicyError(f"{where}registries {name}: credentials are only sent over https, and {url} is http")
+        found[name] = Mirror(url, token.strip(), basic.strip())
+    return found
 
 
 def allows(entries, where: str = "") -> list[Allow]:

@@ -195,3 +195,31 @@ def test_unripe_config_names_a_file(tmp_path, monkeypatch):
     (tmp_path / "policy.toml").write_text('min-age = "2d"\n')
     monkeypatch.setenv("UNRIPE_CONFIG", str(tmp_path / "policy.toml"))
     assert config(tmp_path)[0] == {"min-age": "2d"}
+
+
+def test_registries_in_the_config():
+    from unripe.policy import Mirror
+
+    policy = build({"registries": {"npm": "https://npm.example.com/", "pypi": {"url": "https://pypi.example.com/simple-api", "basic-env": "PYPI_AUTH"}, "go": {"url": "https://goproxy.example.com", "token-env": "GO_TOKEN"}}})
+    assert policy.registries == {
+        "npm": Mirror("https://npm.example.com"),
+        "pypi": Mirror("https://pypi.example.com/simple-api", basic_env="PYPI_AUTH"),
+        "go": Mirror("https://goproxy.example.com", token_env="GO_TOKEN"),
+    }
+
+
+@pytest.mark.parametrize(
+    "table, said",
+    [
+        ({"maven": "https://repo.example.com"}, "not maven"),
+        ({"npm": {"token-env": "X"}}, "needs a url"),
+        ({"npm": "ftp://npm.example.com"}, "not an http or https URL"),
+        ({"npm": {"url": "http://npm.example.com", "token-env": "NPM_TOKEN"}}, "only sent over https"),
+        ({"npm": {"url": "https://npm.example.com", "token-env": "A", "basic-env": "B"}}, "not both"),
+        ({"npm": {"url": "https://npm.example.com", "token": "abc"}}, "it takes url, token-env and basic-env"),
+        ("https://npm.example.com", "should be a table"),
+    ],
+)
+def test_registries_mistakes_are_explained(table, said):
+    with pytest.raises(PolicyError, match=said):
+        build({"registries": table})

@@ -1,7 +1,7 @@
 # unripe for GitLab CI. Add it to your .gitlab-ci.yml with:
 #
 #   include:
-#     - remote: https://raw.githubusercontent.com/TexWoW/unripe/v0.6.1/ci/gitlab.yml
+#     - remote: https://raw.githubusercontent.com/TexWoW/unripe/v0.7.0/ci/gitlab.yml
 #
 # On merge requests it checks only the versions the merge request adds. On the
 # default branch it checks everything. Findings show in the merge request's
@@ -13,7 +13,7 @@ unripe:
   # the full image, not -slim: --since needs git
   image: python:3.13
   variables:
-    UNRIPE_VERSION: "0.6.1"
+    UNRIPE_VERSION: "0.7.0"
     UNRIPE_MIN_AGE: "3d"
     # anything else to pass, like "--exclude npm:@myorg/* --unknown warn"
     UNRIPE_ARGS: ""

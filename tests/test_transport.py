@@ -159,3 +159,16 @@ def test_a_certificate_error_says_what_to_set_and_is_not_retried(monkeypatch):
     with pytest.raises(registries.Unreachable, match="set UNRIPE_CA_BUNDLE or SSL_CERT_FILE"):
         registries.fetch("https://registry.example/thing")
     assert len(calls) == 1
+
+
+def test_credentials_never_follow_a_redirect_to_another_host_through_a_proxy():
+    """Through a proxy, urllib follows redirects itself, and on its own it keeps the Authorization header."""
+    import io as stream
+    import urllib.request
+
+    handler = registries.Redirects()
+    request = urllib.request.Request("https://npm.example.com/left-pad", headers={"Authorization": "Bearer s3cret"})
+    elsewhere = handler.redirect_request(request, stream.BytesIO(), 302, "Found", {}, "https://cdn.example.net/left-pad")
+    assert not elsewhere.has_header("Authorization")
+    same = handler.redirect_request(request, stream.BytesIO(), 302, "Found", {}, "https://npm.example.com/other")
+    assert same.get_header("Authorization") == "Bearer s3cret"

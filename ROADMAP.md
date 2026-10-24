@@ -16,10 +16,7 @@ The rules every item has to keep:
 ## Next
 
 - **Hex (Elixir).** A pull request is in review.
-- **Private registries in the config.** Mirrors work through environment
-  variables today (`UNRIPE_NPM_REGISTRY`, `UNRIPE_PYPI_URL`,
-  `UNRIPE_MAVEN_REPOS`, `UNRIPE_CONAN_REMOTE`, `GOPROXY`). Setting them per
-  registry in `.unripe.toml`, with a token from the environment, is next.
+- **R (CRAN).** A pull request is approved and waiting to be merged.
 - **A benchmark script.** Reproducible cold and warm cache timings on public
   lockfiles, so speed claims can be checked by anyone.
 - **The v1.0 contract.** Exit codes, the JSON schema
@@ -88,7 +85,7 @@ Done means released, with tests. The version says when.
 | 15 | Security-fix exceptions | Done: exact fixed version only, malware reports excluded |
 | 16 | Vulnerability context | Not planned |
 | 17 | Typosquatting | Not planned |
-| 18 | Mirrors and private registries | Partly: environment variables. Next: config |
+| 18 | Mirrors and private registries | Done, 0.7.0: `[registries]` with credentials from the environment |
 | 19 | Parser fuzz testing | Done, 0.6.0: every fixture truncated and scrambled |
 | 20 | Attack regression fixtures | Done, 0.6.0: [docs/case-studies.md](docs/case-studies.md) |
 
@@ -119,7 +116,7 @@ Done means released, with tests. The version says when.
 | 36 | vcpkg | Research issue |
 | 37 | Nix flakes | Research issue |
 | 38 | Bazel | Research issue |
-| 39 | Private registry setup | Next, with 18 |
+| 39 | Private registry setup | Done, 0.7.0, with 18 |
 | 40 | Extension interface | Not planned as plugins; documented in CONTRIBUTING |
 | | Terraform providers | Done, 0.6.0 (not on the original list) |
 

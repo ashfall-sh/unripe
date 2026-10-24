@@ -99,7 +99,9 @@ class Git:
 
     def run(self, directory: Path, *args: str) -> subprocess.CompletedProcess:
         try:
-            return subprocess.run(["git", "-C", str(directory), *args], capture_output=True, timeout=60)
+            # git never reads stdin here, and on Windows an inherited stdin that isn't a
+            # real handle (unripe started by an agent or a service) fails with WinError 6
+            return subprocess.run(["git", "-C", str(directory), *args], stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
         except FileNotFoundError as error:
             raise Problem("--since needs git, and git was not found") from error
         except subprocess.TimeoutExpired as error:

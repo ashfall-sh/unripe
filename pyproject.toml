@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unripe"
-version = "0.6.1"
+version = "0.7.0"
 description = "Fail the build when a locked dependency is younger than you trust. One check for npm, pnpm, yarn, bun, Deno, PyPI, Cargo, Go, Composer, RubyGems, NuGet, Gradle, Dart, CocoaPods, Swift, Terraform, Conan and R renv.lock lockfiles, GitHub Actions, and an MCP server for AI agents."
 readme = "README.md"
 license = "MIT"
